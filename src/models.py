@@ -179,31 +179,17 @@ def terminate_polymerase(RNAP):
 class Simulation(object):
     '''
     Class that contains the parameters for running a simulation 
-    Can also specify variables
-    
-    Parameter ideas: 
-        temperature - 37oC?
-        salt concentration of environment
-        concentration of RNAPs
-        time scale/increments
-        elongation rate cutoff
-        NTP concentration
-        per operon initiation frequency (how many RNAP begin per s) (fange et al used 1/s, avg dist bt RNAP ~100bp)
 
-    tadigotla had a cutoff to discriminate paused complexes from nonpaused complexes
+    #TODO: plotly or sympy text plot for polymerase positions
 
-    possible simulation types:
-        monte carlo gillepsie algorithm?
-        read this:
-            http://people.math.umass.edu/~markos/697SC/ssa.pdf
-        and look at stochpy's source code
-
-    sympy text plot for polymerase positions
-
+    self.maxN = maximum rate for NTP addition where N=A,C,G,U
+        -taken from Bai et al 2007
+    self.dN = dissociation constant for NTPs where N=A,C,G,U
+        -also taken from Bai 2007
     self.K_dock = 4400
         -Dennis et al 2004 said 110 initiations/minute = 1.83333 init/sec is max initiation rate... and RNAP concentration at 1/2 maximal activity is 4.35 microM
         -free RNAP concentration is 
-    self.NTP_concentration = 20 uM 
+    self.NTPc = 20 uM 
         -tadigotla et al 2006 dissociation constant for NTP binding to RNAP during transcription
     self.T = 310.15 K
         -37 degrees celsius to Kelvin - all NN parameters are defined at this temp
@@ -223,8 +209,8 @@ class Simulation(object):
         'K_dU': 24,
         'K_maxG': 36,
         'K_dG': 62,
-        'K_dC': 7,
         'K_maxC': 33,
+        'K_dC': 7,
         'NTPc': 20,
         'T': 310.15,
         'Kb': 0.0019872041,
@@ -326,16 +312,6 @@ class Simulation(object):
 class Operon(object):
     '''
     Class for an operon instance to represent a template DNA strand during transcription
-
-    attributes:
-        name        = name of operon
-        seq         = sequence of operon
-        strand      = 5 or 3. Specifies whether the sequence is the 5' to 3' or the 3' to 5' representation
-        length      = length of sequence
-        motifs      = sequence motifs on the operon. should at the bare minimum contain promoters and terminators.
-        simulating  = True or False, represents whether operon is currently behaving in a simulation or 
-        elapsed     = time elapsed (in seconds) for simulation
-        data        = nested list that will contain all information about the polymerase positions on the operon 
     '''
     def __init__(self, environment, **kwargs):
         for key, val in kwargs.items():
@@ -419,10 +395,6 @@ class RNAPII(object):
     Class for a rna polymerase/transcription bubble/elongation complex, which consists of a melted (unhybridized) 11-16 nt DNA duplex template enclosed by an RNAP and 
     stabilized by a nascent RNA molecule
 
-    yager/von hippel 1991 says bubble is 17 +- 1
-
-    moves 3' to 5'
-
     mechanism options: 
         1) powerstroke
             -'makes use of the energy released during phosphodiester bond formation to drive 
@@ -433,16 +405,10 @@ class RNAPII(object):
             -'phosphodiester bond formation rectifies the motion and resets the system into a 
             state with a longer transcript length, poised to incorporate the next NTP'
 
-    master equation?
-    arrhenius rate?
-
-    duplex should be 2d list [[5'A,3'T], [G, C], [G, gap], etc]
-    
     free energy of the state (m,n,b) of the EC is decomposed by:
         Gmnb = G(DNA-DNA)mnb + G(RNA-DNA)mnb + G(RNA-RNA)mnb + G(NS)
 
     self.template               = operon.template
-    # self.polymerase           = None
     self.growing_strand         = begin with string, eventually make it a nascent seq object? is 9 nucleotides long in Bai's model.
     self.position               = nucleotide coordinate of upstream-most element in tx bubble
     self.m                      = length of RNA transcript
