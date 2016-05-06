@@ -18,4 +18,4 @@ rrnB = models.Operon(environment=sim, **seqinfo)
 
 #run simulation and write results
 sim.run(operon=rrnB, duration=1200)
-sim.write_data('tmp')
+# operon.write_data('tmp')
