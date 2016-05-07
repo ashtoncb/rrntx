@@ -5,6 +5,15 @@
 TODO:
     *polymerase densities on operon method for operon
     *plotly implementation for viewing density evolution
+
+    1. initialize:
+        a. set initial numbers of molecules, set t <- 0
+        b. calculate the rates for all event
+        c. for each event, generate a putative time Tau
+        d. store the Taus in a priority queue
+    2. pop the event with the smallest time from the heap
+    3. update the overall time t
+    4. generate a random number p and set Ta = p + t    
 '''
 #--------
 # imports
@@ -16,7 +25,7 @@ import pandas as pd
 #import plotly
 import random
 import string
-# import sys
+import sys
 from heapq import *
 from itertools import groupby
 
@@ -122,45 +131,36 @@ def sample_t2_detachment():
     return 1
 
 # simulation events
-def attempt_docking(operon):
+def attempt_docking(operon, time):
     # print 'A polymerase is attempting to bind the promoter region...'
     if operon.promoter_available and sample_polymerase_binding_promoter():
-        promote_EC(operon)
-    operon._sim.heap_push((sample_Tau(operon._sim._params['K_dock']), operon, 'attempt_docking'))
+        promote_EC(operon, time)
+    operon._sim.heap_push((time + sample_Tau(operon._sim._params['K_dock']), sample_Tau(operon._sim._params['K_dock']), operon, 'attempt_docking'))
 
-def promote_EC(operon):
+def promote_EC(operon, time):
     # print 'A polymerase has successfully bound the promoter region and formed an elongation complex!'
     RNAP = RNAPII(operon)
     operon._RNAPS.append(RNAP)
-    operon._sim.heap_push((sample_Tau(RNAP.Kavg), RNAP, 'translocate_polymerase'))
+    RNAP.operon._sim.heap_push((time + RNAP._time, RNAP._time, RNAP, 'translocate_polymerase'))
 
-def translocate_polymerase(RNAP):
+def translocate_polymerase(RNAP, time):
     # if not RNAP.active:
         # sys.exit('Inactive polymerase was queued for an event on the simulation heap')
-
-    # if RNAP.operon.promoter_available and 'attempt_docking' not in [event[2] for event in RNAP.operon._sim._heap]:
-    #     # RNAP.operon._sim.heap_push((sample_Tau(RNAP.operon._sim._params['K_dock']), RNAP.operon, 'attempt_docking'))
-    #     RNAP.operon._sim.heap_push((0, RNAP.operon, 'attempt_docking'))
-
-    # if RNAP.frontblocked:
-    #     RNAP.operon._sim.heap_pop()
     if RNAP.operon.promoter_available:
-        RNAP.operon._sim.heap_push((0.0000000000, RNAP.operon, 'attempt_docking'))
-
-    RNAP.translocate_brownian()
+        RNAP.operon._sim.heap_push((time, sample_Tau(RNAP.operon._sim._params['K_dock']), RNAP.operon, 'attempt_docking'))
 
     # check to see if polymerase is in terminator regions and if so whether it should detach
     if RNAP.position in range(*RNAP.operon.t1) and sample_t1_detachment():
-        RNAP.operon._sim.heap_push((0.0000000000, RNAP, 'terminate_polymerase'))
+        RNAP.operon._sim.heap_push((time, RNAP._time, RNAP, 'terminate_polymerase'))
         return
-    if RNAP.position in range(*RNAP.operon.t2) and sample_t2_detachment():
-        RNAP.operon._sim.heap_push((0.0000000000, RNAP, 'terminate_polymerase'))
+    elif RNAP.position in range(*RNAP.operon.t2) and sample_t2_detachment():
+        RNAP.operon._sim.heap_push((time, RNAP._time, RNAP, 'terminate_polymerase'))
         return
+    else:
+        RNAP.translocate_brownian()
+        RNAP.operon._sim.heap_push((time + RNAP._time, RNAP._time, RNAP, 'translocate_polymerase'))
 
-    # if function makes it to this point, add polymerase back to the heap for its next event
-    RNAP.operon._sim.heap_push((sample_Tau(RNAP.Kavg), RNAP, 'translocate_polymerase'))
-
-def terminate_polymerase(RNAP):
+def terminate_polymerase(RNAP, time):
     RNAP.active = 0
     RNAP.operon._RNAPS.remove(RNAP)
     # print 'The polymerase at nucleotide position {} has detached from the operon at time {}!'.format(RNAP.position, RNAP.operon._sim._t)
@@ -237,12 +237,12 @@ class Simulation(object):
             heapify(self._heap)
 
     def heap_pop(self):
-        reaction_Tau, reaction_Subject, reaction_Event = heappop(self._heap)
+        time, reaction_Tau, reaction_Subject, reaction_Event = heappop(self._heap)
         self._t += reaction_Tau
         self._timer += reaction_Tau
         self._log += 'Reaction event "{}" for subject "{}" at time {}\n'.format(reaction_Event, reaction_Subject.name, self._t)
         # print 'Reaction event "{}" for subject "{}" at time {}'.format(reaction_Event, reaction_Subject.name, self._t)
-        self._reactions[reaction_Event](reaction_Subject)
+        self._reactions[reaction_Event](reaction_Subject, time)
         heapify(self._heap)
 
     def heap_sort(self):
@@ -260,6 +260,7 @@ class Simulation(object):
                             'terminate_polymerase': terminate_polymerase
                             }
         tc = increment
+        tstep = 0
 
         # Gillespie direct method
         if self.algorithm == 'direct':
@@ -278,19 +279,25 @@ class Simulation(object):
                                         # [0, 0, 0, 1]]) #         ultimate dissolution of tx bubble
 
             # initial event to begin simulation is attempt to bind polymerase to promoter
+            self._Tau_dock = sample_Tau(self._params['K_dock'])
+
             if not self._heap:
-                # self.heap_push((sample_Tau(self._params['K_dock']), operon, 'attempt_docking'))
-                self.heap_push((0, operon, 'attempt_docking'))
+                self.heap_push((0, self._Tau_dock, operon, 'attempt_docking'))
 
             while self._timer < duration:
                 self.heap_pop()
                 self.heap_sort()
-                print '\n'*4
-                print '\n'*3
-                print 'Time elapsed: {}'.format(self._timer)
-                print operon.operon_string
-                print '\n'*2
-                print '\n'*1
+
+                if self._timer>tstep:
+                    print '\n'*4
+                    print '\n'*3
+                    print 'Time elapsed: {}'.format(self._timer)
+                    print operon.operon_string
+                    # print self._heap
+                    print '\n'*2
+                    print '\n'*1
+                    tstep += 0.1
+
                 # print self._heap
                 if self._timer > tc:
                     # print 'Saving snapshot of RNAP positions at simulation time {}...'.format(round(self._timer,2))
@@ -333,6 +340,9 @@ class Operon(object):
         # self.motifs = self.IdentifyMotifs()
         # self._promoter_status = self._sim._reactants[0][0]
 
+    def __str__(self):
+        return 'Operon: {}\nTotal ECs:  {}\n{}'.format(self.name, str(len(self._RNAPS)))
+
     @property
     def _RNAP_coords(self):
         return [x.position for x in self._RNAPS]
@@ -364,9 +374,6 @@ class Operon(object):
         if any(x in binding_region for x in self._RNAP_coords):
             return 0
         return 1
-
-    def __str__(self):
-        return 'Operon: {}\nTotal ECs:  {}\n{}'.format(self.name, str(len(self._RNAPS)))
   
     def display_local(self, x, window=30):
         x = 30 if x < 30 else x
@@ -390,11 +397,11 @@ class Operon(object):
         df = pd.DataFrame(self._data, columns=['RNAP', 'x', 't'])
         df.to_csv(prefix+'.csv', index=False)
         print 'Wrote polymerase positions to', df_file
-        log_file = str(prefix) + '.log'
-        with open(log_file, 'w') as w:
-            w.write(self._log)
-        w.close()
-        print 'Wrote event log to', log_file
+        # log_file = str(prefix) + '.log'
+        # with open(log_file, 'w') as w:
+            # w.write(self._log)
+        # w.close()
+        # print 'Wrote event log to', log_file
 
 class RNAPII(object):
     '''
@@ -435,7 +442,7 @@ class RNAPII(object):
                                         # (iii) the folding of the RNA transcript protruding out of the exit channel, and
                                         # (iv) the possible change in RNA-DNA and RNAP-RNA interactions
     '''    
-    def __init__(self, operon, position=12):
+    def __init__(self, operon, position=9):
         self.operon     = operon
         self.simulation = operon._sim
         self.active     = 1
@@ -448,13 +455,17 @@ class RNAPII(object):
         self.b              = (self.x, self.h, self.y)
         self.bsize          = sum(self.b)
         self.EC_state       = (self.m, self.n, self.b)
-        self.paused         = 0
+        # self._time           = sample_Tau(self.K00*10)
         for key in self.operon._sim._params:
             setattr(self, key, self.operon._sim._params[key])
 
     @property
     def name(self):
         return 'RNAP at position ' + str(self.position)
+
+    @property
+    def _time(self):
+        return sample_Tau(sum([x[-1] for x in self.Kforwards])+1)
 
     @property
     def growing_strand(self):
@@ -466,6 +477,8 @@ class RNAPII(object):
 
     @property
     def upstream_neighbor(self):
+        if len(self.operon._RNAPS) <= 1:
+            return 0
         if self.position == max(self.operon._RNAP_coords):
             return 0
         v = sorted(self.operon._RNAP_coords).index(self.position)
@@ -473,6 +486,8 @@ class RNAPII(object):
 
     @property
     def downstream_neighbor(self):
+        if len(self.operon._RNAPS) <= 1:
+            return 0
         if self.position == min(self.operon._RNAP_coords):
             return 0
         v = sorted(self.operon._RNAP_coords).index(self.position)
@@ -480,25 +495,25 @@ class RNAPII(object):
 
     @property
     def frontlimit(self):
-        if 0 <= abs(self.upstream_neighbor - self.position) < 12:
-            return self.upstream_neighbor - self.position
+        if 0 <= abs(self.upstream_neighbor - self.position) <= 12:
+            return abs(self.upstream_neighbor - self.position) - 1
         else:
             return 12
 
     @property
     def backlimit(self):
-        if 0 <= abs(self.downstream_neighbor - self.position) < 9:
-            return self.downstream_neighbor  - self.position 
+        if 0 <= abs(self.downstream_neighbor - self.position) <= 9:
+            return self.downstream_neighbor  - self.position + 1
         else:
             return -9
 
     @property
     def frontblocked(self):
-        return 1 if self.frontlimit == 0 else 0
+        return 1 if self.frontlimit <= 1 else 0
 
     @property
     def backblocked(self):
-        return 1 if self.backlimit == 0 else 0
+        return 1 if self.backlimit <= 1 else 0
 
     @property
     def queue(self):
@@ -517,8 +532,10 @@ class RNAPII(object):
 
     @property
     def Kforwards(self):
+        if self.frontblocked:
+            return [[0,0]]
         fs = []
-        for i in range(0,self.frontlimit+1):
+        for i in range(0,self.frontlimit):
             K_NTPmax = self.operon._sim._params['K_max'+self.nextbase(i+1)]
             K_NTPd = self.operon._sim._params['K_d'+self.nextbase(i+1)]
             NTPc = self.operon._sim._params['NTPc']
@@ -530,8 +547,10 @@ class RNAPII(object):
 
     @property
     def Kbackwards(self):
+        if self.backblocked:
+            return [(0,0)]
         bs = []
-        for i in range(0,self.backlimit-1,-1):
+        for i in range(0,self.backlimit,-1):
             K_NTPmax = self.operon._sim._params['K_max'+self.nextbase(i-1)]
             K_NTPd = self.operon._sim._params['K_d'+self.nextbase(i-1)]
             NTPc = self.operon._sim._params['NTPc']
@@ -543,6 +562,8 @@ class RNAPII(object):
 
     @property
     def forward_moves(self):
+        if self.frontblocked:
+            return [[0,0]]
         moves = sorted([[x[1]/float(sum(zip(*self.Kforwards)[-1])),x[0]] for x in self.Kforwards], reverse=True)
         for i in range(len(moves)-1):
             moves[i+1][0] += moves[i][0]
@@ -550,6 +571,8 @@ class RNAPII(object):
 
     @property
     def backward_moves(self):
+        if self.backblocked:
+            return [[0,0]]
         moves = sorted([[x[1]/float(sum(zip(*self.Kbackwards)[-1])),x[0]] for x in self.Kbackwards], reverse=True)
         for i in range(len(moves)-1):
             moves[i+1][0] += moves[i][0]
@@ -575,10 +598,6 @@ class RNAPII(object):
     def Ppause(self):
         return self.Kpause/self.Zc
 
-    @property
-    def Kavg(self):
-        return 100
-
     def calc_Ki(self, n1, n2):
         return math.exp((self.calc_dGi(n2) - self.calc_dGi(n1))/self.operon._sim._params['KbT'])
 
@@ -596,20 +615,26 @@ class RNAPII(object):
         return (self.operon.template[self.position+n:self.position+10+n], self.generate_nasceq(n))
 
     def nextbase(self,n):
+        try:
+            nextbase = rnacomp(self.operon.template[self.position+10+n])
+        except IndexError:
+            print "attempted index: ", n
+            if self.position in range(*self.operon.t2) and sample_t2_detachment():
+                print 'even passed this....???'
+            print "Operon length: {}, position: {}, upstream neighbor: {}, frontlimit {}, frontblocked {}, downstream neighbor {}, downlimit{}, downblocked {}".format(self.operon.length, self.position, self.upstream_neighbor, self.frontlimit, self.frontblocked, self.downstream_neighbor, self.backlimit, self.backblocked)
+            sys.exit()
         return rnacomp(self.operon.template[self.position+10+n])
 
     def translocate_powerstroke(self):
         pass
 
     def translocate_brownian(self):
-        # try to permit no more than 1 consecutive backtrack
-        if self.paused or self.on_promoter:
+        if self.on_promoter:
             if random.uniform(0.0, 1.0) <= self.Pforward:
                 newdraw = random.uniform(0.0,1.0) 
                 moves = self.forward_moves
                 bisect.insort_left(moves, [newdraw, newdraw])
                 self.position += moves[zip(*moves)[1].index(newdraw) + 1][1]
-                self.paused = 0
             return 
         else:
             draw = random.uniform(0.0, 1.0)
@@ -624,17 +649,14 @@ class RNAPII(object):
                 return
             elif self.Pforward < draw <= self.Pforward + self.Pbackward:
                 if self.backblocked:
-                    self.paused = 1
                     return
                 if len(self.backward_moves) > 1:
                     newdraw = random.uniform(0.0,1.0) 
                     moves = self.backward_moves
                     bisect.insort_left(moves, [newdraw, newdraw])
                     self.position -= moves[zip(*moves)[1].index(newdraw) + 1][1]
-                    self.paused = 1
                 return 
             else:
-                self.paused = 1
                 return 
 
 # class NascentSeq(object):
