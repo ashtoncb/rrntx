@@ -3,17 +3,7 @@
 # ------------------------------------------------
 '''
 TODO:
-    *polymerase densities on operon method for operon
-    *plotly implementation for viewing density evolution
-
-    1. initialize:
-        a. set initial numbers of molecules, set t <- 0
-        b. calculate the rates for all event
-        c. for each event, generate a putative time Tau
-        d. store the Taus in a priority queue
-    2. pop the event with the smallest time from the heap
-    3. update the overall time t
-    4. generate a random number p and set Ta = p + t    
+    *plotly implementation for viewing density evolution  
 '''
 #--------
 # imports
@@ -73,8 +63,8 @@ def DNARNA_dG(duplex):
     return dG
 
 def foldingRNA_dG(nascentseq):
-    # eventually want to calcualte the dG of any hairpin sequences in the proximate nascent growing strand which may cause polymerase pauses
-    # for now, just make this an arbitrary function of length
+    #  maybe want to calcualte the dG of any hairpin sequences in the proximate nascent growing strand which may cause polymerase pauses
+    #  for now, just make this an arbitrary function of length because this doesnt have a huge contribution to the actual energetics 
     return math.log(math.sqrt(len(nascentseq)))
 
 def RNAP_RNA_dG(nascentseq):
@@ -172,8 +162,6 @@ def terminate_polymerase(RNAP, time):
 class Simulation(object):
     '''
     Class that contains the parameters for running a simulation 
-
-    #TODO: plotly or sympy text plot for polymerase positions
 
     self.maxN = maximum rate for NTP addition where N=A,C,G,U
         -taken from Bai et al 2007
