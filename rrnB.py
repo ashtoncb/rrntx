@@ -17,5 +17,5 @@ seqinfo = models.fasta_to_seqdic(open('operons/rrnB.fa', 'r')).next()
 rrnB = models.Operon(environment=sim, **seqinfo)
 
 #run simulation and write results
-sim.run(operon=rrnB, duration=1200)
-# operon.write_data('tmp')
+sim.run(operon=rrnB, duration=7200)
+rrnB.write_data('rrnBt1')
