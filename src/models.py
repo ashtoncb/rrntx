@@ -25,9 +25,10 @@ from itertools import groupby
 # live streaming setup
 #---------------------
 stream_ids = tls.get_credentials_file()['stream_ids']
-stream_id1, stream_id2 = stream_ids[0], stream_ids[1]
+stream_id1, stream_id2, stream_id3 = stream_ids[0], stream_ids[1], stream_ids[2]
 stream_1 = go.Stream(token=stream_id1, maxpoints=20)
 stream_2 = go.Stream(token=stream_id2, maxpoints=20) 
+stream_3 = go.Stream(token=stream_id3, maxpoints=20)
 
 #----------
 # reference
@@ -195,7 +196,8 @@ class Simulation(object):
     '''
 
     global _default_params 
-    global _quan_2005_estimate
+    global _quan_2005_elecmicr 
+    global _berger_2016_netseq
 
     _default_params = {
         'K_dock': 1.833,
@@ -213,14 +215,19 @@ class Simulation(object):
         'KbT': 0.61633135161,
     }
 
-    _quan_2005_estimate = {'x':[0, 279, 571, 863, 1155, 1448, 1740, 2032, 2325, 2617, 2909, 3201, 3494, 3786, 4078, 4370, 4663, 4955, 5247, 5539], 
+    _quan_2005_elecmicr = {'x':[0, 279, 571, 863, 1155, 1448, 1740, 2032, 2325, 2617, 2909, 3201, 3494, 3786, 4078, 4370, 4663, 4955, 5247, 5539], 
                            'y':[0.000000, 2.077519, 3.612403, 6.635658, 7.395348, 6.620155, 7.395348, 6.635658, 4.372093, 5.116279, 6.248062, 
                                 7.178294, 7.968992, 7.379844, 5.503875, 5.674418, 5.116279, 3.596899, 1.333333, 0.558139, 0.201550]}
+
+    _berger_2016_netseq = {'x':[0, 292, 584, 876, 1168, 1460, 1752, 2044, 2336, 2628, 2920, 3212, 3504, 3796, 4088, 4380, 4672, 4964, 5256, 5442],
+                           'y':[0.000000, 5.270171, 6.877265, 5.264509, 4.118433, 5.738468, 5.077473, 4.170196, 5.440424, 1.953465, 5.734222, 6.072303, 
+                                6.770503, 5.084146, 4.289697, 5.611486, 6.068865, 5.442850, 6.183109, 4.832405]}
 
     def __init__(self, **kwargs):
         self.quiet          = 0
         self._params        = _default_params
-        self._default_line  = _quan_2005_estimate
+        self._default_line1 = _quan_2005_elecmicr 
+        self._default_line2 = _berger_2016_netseq
         self._log           = ''
         self._t             = 0
         self._timer         = 0
@@ -260,9 +267,10 @@ class Simulation(object):
 
     def run(self, operon, duration=1200, increment=5.00):
         #live streaming housekeeping
-        trace1 = go.Scatter(x=self._default_line['x'], y=self._default_line['y'], name='Quan et al 2005 estimate', mode='lines+markers', stream=stream_1)
+        trace1 = go.Scatter(x=self._default_line1['x'], y=self._default_line1['y'], name='Electron microscopy data (Quan et al 2005)', mode='lines+markers', stream=stream_1)
         trace2 = go.Scatter(x=[], y=[], name='Live density predictions', mode='lines+markers', stream=stream_2)
-        stream_data = go.Data([trace1, trace2])
+        trace3 = go.Scatter(x=self._default_line2['x'], y=self._default_line2['y'], name='NETseq analysis data (Berger 2016)', mode='lines+markers', stream=stream_3)
+        stream_data = go.Data([trace1, trace2, trace3])
         plottime = 0.00
         plottitle = 'Simulated polymerase densities on the {} operon at time {}'.format(operon.name, plottime)
         plotfile = 'plotly-streaming-{}'.format(operon.name)

@@ -19,7 +19,7 @@ sim_args = {
 sim = models.Simulation(**sim_args)
 
 #create operon to run simulation on
-seqinfo = models.fasta_to_seqdic(open('operons/rrnB.fa', 'r')).next()
+seqinfo = models.fasta_to_seqdic(open('operon_fastas/rrnB.fa', 'r')).next()
 rrnB = models.Operon(environment=sim, **seqinfo)
 
 #run simulation and write results
