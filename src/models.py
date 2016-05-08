@@ -25,10 +25,9 @@ from itertools import groupby
 # live streaming setup
 #---------------------
 stream_ids = tls.get_credentials_file()['stream_ids']
-stream_id = stream_ids[0]
-stream_1 = go.Stream(token=stream_id, maxpoints=20)
-trace1 = go.Scatter(x=[], y=[], mode='lines+markers', stream=stream_1)
-stream_data = go.Data([trace1]) 
+stream_id1, stream_id2 = stream_ids[0], stream_ids[1]
+stream_1 = go.Stream(token=stream_id1, maxpoints=20)
+stream_2 = go.Stream(token=stream_id2, maxpoints=20) 
 
 #----------
 # reference
@@ -196,6 +195,7 @@ class Simulation(object):
     '''
 
     global _default_params 
+    global _quan_2005_estimate
 
     _default_params = {
         'K_dock': 1.833,
@@ -213,9 +213,14 @@ class Simulation(object):
         'KbT': 0.61633135161,
     }
 
+    _quan_2005_estimate = {'x':[0, 279, 571, 863, 1155, 1448, 1740, 2032, 2325, 2617, 2909, 3201, 3494, 3786, 4078, 4370, 4663, 4955, 5247, 5539], 
+                           'y':[0.000000, 2.077519, 3.612403, 6.635658, 7.395348, 6.620155, 7.395348, 6.635658, 4.372093, 5.116279, 6.248062, 
+                                7.178294, 7.968992, 7.379844, 5.503875, 5.674418, 5.116279, 3.596899, 1.333333, 0.558139, 0.201550]}
+
     def __init__(self, **kwargs):
         self.quiet          = 0
         self._params        = _default_params
+        self._default_line  = _quan_2005_estimate
         self._log           = ''
         self._t             = 0
         self._timer         = 0
@@ -255,13 +260,16 @@ class Simulation(object):
 
     def run(self, operon, duration=1200, increment=5.00):
         #live streaming housekeeping
+        trace1 = go.Scatter(x=self._default_line['x'], y=self._default_line['y'], name='Quan et al 2005 estimate', mode='lines+markers', stream=stream_1)
+        trace2 = go.Scatter(x=[], y=[], name='Live density predictions', mode='lines+markers', stream=stream_2)
+        stream_data = go.Data([trace1, trace2])
         plottime = 0.00
         plottitle = 'Simulated polymerase densities on the {} operon at time {}'.format(operon.name, plottime)
         plotfile = 'plotly-streaming-{}'.format(operon.name)
         layout = go.Layout(title=plottitle, xaxis=dict(title='Position'), yaxis=dict(title='Density'))
         fig = go.Figure(data=stream_data, layout=layout)
         py.iplot(fig, filename=plotfile)
-        s = py.Stream(stream_id)
+        s = py.Stream(stream_id2)
         s.open()
 
         #initialize settings    

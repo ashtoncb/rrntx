@@ -1,10 +1,16 @@
 #!/usr/bin/env python
 # @author <ashtoncberger@utexas.edu>
 # ------------------------------------------------
+'''
+live streams from this simulation are hosted at:
+https://plot.ly/~ashtoncb/0/simulated-polymerase-densities-on-the-rrnb-operon-at-time-00/
+'''
+
 from src import models
 
 #create simulation
-sim_args = {'quiet': 1,
+sim_args = {
+            # 'quiet': 1,
             'mechanism':'brownian_ratchet',
             'multibubbles':False, 
             'folding':False, 
