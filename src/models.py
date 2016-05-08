@@ -12,12 +12,23 @@ import bisect
 import math
 # import numpy as np
 import pandas as pd
-#import plotly
+import plotly.plotly as py
+import plotly.tools as tls
+import plotly.graph_objs as go
 import random
 import string
 import sys
 from heapq import *
 from itertools import groupby
+
+#---------------------
+# live streaming setup
+#---------------------
+stream_ids = tls.get_credentials_file()['stream_ids']
+stream_id = stream_ids[0]
+stream_1 = go.Stream(token=stream_id, maxpoints=20)
+trace1 = go.Scatter(x=[], y=[], mode='lines+markers', stream=stream_1)
+stream_data = go.Data([trace1]) 
 
 #----------
 # reference
@@ -126,18 +137,20 @@ def attempt_docking(operon, time):
     if operon.promoter_available and sample_polymerase_binding_promoter():
         promote_EC(operon, time)
     operon._sim.heap_push((time + sample_Tau(operon._sim._params['K_dock']), sample_Tau(operon._sim._params['K_dock']), operon, 'attempt_docking'))
+    return
 
 def promote_EC(operon, time):
     # print 'A polymerase has successfully bound the promoter region and formed an elongation complex!'
     RNAP = RNAPII(operon)
     operon._RNAPS.append(RNAP)
     RNAP.operon._sim.heap_push((time + RNAP._time, RNAP._time, RNAP, 'translocate_polymerase'))
+    return
 
 def translocate_polymerase(RNAP, time):
     # if not RNAP.active:
         # sys.exit('Inactive polymerase was queued for an event on the simulation heap')
-    if RNAP.operon.promoter_available:
-        RNAP.operon._sim.heap_push((time, sample_Tau(RNAP.operon._sim._params['K_dock']), RNAP.operon, 'attempt_docking'))
+    # if RNAP.operon.promoter_available:
+    #     RNAP.operon._sim.heap_push((time + sample_Tau(RNAP.operon._sim._params['K_dock']), sample_Tau(RNAP.operon._sim._params['K_dock']), RNAP.operon, 'attempt_docking'))
 
     # check to see if polymerase is in terminator regions and if so whether it should detach
     if RNAP.position in range(*RNAP.operon.t1) and sample_t1_detachment():
@@ -149,11 +162,13 @@ def translocate_polymerase(RNAP, time):
     else:
         RNAP.translocate_brownian()
         RNAP.operon._sim.heap_push((time + RNAP._time, RNAP._time, RNAP, 'translocate_polymerase'))
+        return
 
 def terminate_polymerase(RNAP, time):
     RNAP.active = 0
     RNAP.operon._RNAPS.remove(RNAP)
     # print 'The polymerase at nucleotide position {} has detached from the operon at time {}!'.format(RNAP.position, RNAP.operon._sim._t)
+    return
 
 
 #--------
@@ -199,16 +214,15 @@ class Simulation(object):
     }
 
     def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-        # private
+        self.quiet          = 0
         self._params        = _default_params
         self._log           = ''
         self._t             = 0
         self._timer         = 0
-        self._silent        = 0
         self._reactions     = {}
         self._heap          = []
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def __str__(self):
         pass
@@ -223,6 +237,7 @@ class Simulation(object):
             heappush(self._heap, reaction_tuple)
             # TODO: self._environment._reactants - Vij (update Sis?)
             heapify(self._heap)
+            return
 
     def heap_pop(self):
         time, reaction_Tau, reaction_Subject, reaction_Event = heappop(self._heap)
@@ -232,11 +247,23 @@ class Simulation(object):
         # print 'Reaction event "{}" for subject "{}" at time {}'.format(reaction_Event, reaction_Subject.name, self._t)
         self._reactions[reaction_Event](reaction_Subject, time)
         heapify(self._heap)
+        return
 
     def heap_sort(self):
         heapify(self._heap)
+        return
 
-    def run(self, operon, duration=1200, increment=100):
+    def run(self, operon, duration=1200, increment=5.00):
+        #live streaming housekeeping
+        plottime = 0.00
+        plottitle = 'Simulated polymerase densities on the {} operon at time {}'.format(operon.name, plottime)
+        plotfile = 'plotly-streaming-{}'.format(operon.name)
+        layout = go.Layout(title=plottitle, xaxis=dict(title='Position'), yaxis=dict(title='Density'))
+        fig = go.Figure(data=stream_data, layout=layout)
+        py.iplot(fig, filename=plotfile)
+        s = py.Stream(stream_id)
+        s.open()
+
         #initialize settings    
         operon._params = self._params
         # self._t = operon._t
@@ -247,7 +274,7 @@ class Simulation(object):
                             'translocate_polymerase': translocate_polymerase,
                             'terminate_polymerase': terminate_polymerase
                             }
-        tc = increment
+        tc = 0.00
         tstep = 0
 
         # Gillespie direct method
@@ -276,21 +303,29 @@ class Simulation(object):
                 self.heap_pop()
                 self.heap_sort()
 
-                if self._timer>tstep:
-                    print '\n'*4
-                    print '\n'*3
-                    print 'Time elapsed: {}'.format(self._timer)
-                    print operon.operon_string
-                    # print self._heap
-                    print '\n'*2
-                    print '\n'*1
-                    tstep += 0.1
+                if not self.quiet:
+                    if self._timer>tstep:
+                        print '\n'*4
+                        print '\n'*3
+                        print 'Time elapsed: {}'.format(self._timer)
+                        print operon.operon_string
+                        # print self._heap
+                        print '\n'*2
+                        print '\n'*1
+                        tstep += 0.1
 
                 # print self._heap
                 if self._timer > tc:
                     # print 'Saving snapshot of RNAP positions at simulation time {}...'.format(round(self._timer,2))
+                    plottime = round(self._timer, 4)
+                    livedata = []
                     for key,val in operon._RNAP_bins.items():
-                        operon._data.append([key, val, round(self._timer,2)])
+                        operon._data.append([key, val, round(self._timer,4)])
+                        livedata.append([key, val, round(self._timer,4)])
+                    df = pd.DataFrame(sorted(livedata), columns=['Position', 'Density', 'Time'])
+                    newtitle = 'Simulated polymerase densities on the {} operon at time {}'.format(operon.name, plottime)
+                    layout.update(dict(title=newtitle))
+                    s.write(trace=dict(x=df.Position, y=df.Density), layout=layout)
                     tc += increment
                     # print 'RNAP data at time {}:'.format(round(self._timer,2))
                     # print '\tName\tKavg\tPforward\tPaused\tUpstream_Neighbor\tUplimit\tDownstream_Neighbor\tDownlimit'
@@ -298,6 +333,7 @@ class Simulation(object):
                     #     print '\t', r.name, r.Kavg, r.Pforward, r.paused, r.upstream_neighbor, r.downstream_neighbor
             operon._t += self._timer
             operon._log += self._log
+            s.close()
             print 'Simulation for operon {} has completed!'.format(operon.name)
 
         else:
@@ -346,7 +382,7 @@ class Operon(object):
             bin = (x//self.binwidth)
             val = (bin + 1) * self.binwidth
             bind[val] += 1
-        bind = {k:float(v)/self._RNAP_census for k,v in bind.items()}
+        bind = {k:(100.00*float(v)/self._RNAP_census) for k,v in bind.items()}
         return bind
 
     @property

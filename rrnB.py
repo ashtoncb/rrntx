@@ -4,7 +4,7 @@
 from src import models
 
 #create simulation
-sim_args = {
+sim_args = {'quiet': 1,
             'mechanism':'brownian_ratchet',
             'multibubbles':False, 
             'folding':False, 
