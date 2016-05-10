@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 # @author <ashtoncberger@utexas.edu>
 # ------------------------------------------------
+'''
+TODO:
+    1. implement cache for Kij rates - they are redundant and recalculating for every polymerase can be wasteful
+    2. use a profiler to see what else may be slowing simulation down as # ECs on the operon grows
+    3. modify the limits on how close ECs can get to each other
+    4. implement nascent strand folding and energetic contributions to EC states
+    5. more "smooth" updates of the streaming plot
+    6. find more optimizations
+    7. documentation
+'''
 #--------
 # imports
 #--------
@@ -144,8 +154,6 @@ def promote_EC(operon, time):
 def translocate_polymerase(RNAP, time):
     # if not RNAP.active:
         # sys.exit('Inactive polymerase was queued for an event on the simulation heap')
-    # if RNAP.operon.promoter_available:
-    #     RNAP.operon._sim.heap_push((time + sample_Tau(RNAP.operon._sim._params['K_dock']), sample_Tau(RNAP.operon._sim._params['K_dock']), RNAP.operon, 'attempt_docking'))
 
     # check to see if polymerase is in terminator regions and if so whether it should detach
     if RNAP.position in range(*RNAP.operon.t1) and sample_t1_detachment():
@@ -500,7 +508,7 @@ class RNAPII(object):
 
     @property
     def _time(self):
-        return sample_Tau(sum([x[-1] for x in self.Kforwards])+1)
+        return sample_Tau(self.Zc)
 
     @property
     def growing_strand(self):
@@ -650,6 +658,7 @@ class RNAPII(object):
         return (self.operon.template[self.position+n:self.position+10+n], self.generate_nasceq(n))
 
     def nextbase(self,n):
+        # use try and except statements during debugging only
         try:
             nextbase = rnacomp(self.operon.template[self.position+10+n])
         except IndexError:
