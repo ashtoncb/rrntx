@@ -3,13 +3,14 @@
 # ------------------------------------------------
 '''
 TODO:
-    1. implement cache for Kij rates - they are redundant and recalculating for every polymerase can be wasteful
-    2. use a profiler to see what else may be slowing simulation down as # ECs on the operon grows
-    3. modify the limits on how close ECs can get to each other
-    4. implement nascent strand folding and energetic contributions to EC states
-    5. more "smooth" updates of the streaming plot
-    6. find more optimizations
-    7. documentation
+    . implement cache for Kij rates - they are redundant and recalculating for every EC can be wasteful
+    . use a profiler to see what else may be slowing simulation down as # of ECs on the operon grows
+    . modify the limits on how close ECs can get to each other
+    . implement nascent strand folding and energetic contributions to EC states
+    . more "smooth" updates of the streaming plot
+    . find more optimizations
+    . documentation
+    . determine more rules to dictate EC behavior on the promoter regions/maybe incorporate p2 as well
 '''
 #--------
 # imports
@@ -673,35 +674,35 @@ class RNAPII(object):
         pass
 
     def translocate_brownian(self):
-        if self.on_promoter:
-            if random.uniform(0.0, 1.0) <= self.Pforward:
+        # if self.on_promoter:
+        #     if random.uniform(0.0, 1.0) <= self.Pforward:
+        #         newdraw = random.uniform(0.0,1.0) 
+        #         moves = self.forward_moves
+        #         bisect.insort_left(moves, [newdraw, newdraw])
+        #         self.position += moves[zip(*moves)[1].index(newdraw) + 1][1]
+        #     return 
+        # else:
+        draw = random.uniform(0.0, 1.0)
+        if draw <= self.Pforward:
+            if self.frontblocked:
+                return
+            if len(self.forward_moves) > 1:
                 newdraw = random.uniform(0.0,1.0) 
                 moves = self.forward_moves
                 bisect.insort_left(moves, [newdraw, newdraw])
                 self.position += moves[zip(*moves)[1].index(newdraw) + 1][1]
+            return
+        elif self.Pforward < draw <= self.Pforward + self.Pbackward:
+            if self.backblocked:
+                return
+            if len(self.backward_moves) > 1:
+                newdraw = random.uniform(0.0,1.0) 
+                moves = self.backward_moves
+                bisect.insort_left(moves, [newdraw, newdraw])
+                self.position -= moves[zip(*moves)[1].index(newdraw) + 1][1]
             return 
         else:
-            draw = random.uniform(0.0, 1.0)
-            if draw <= self.Pforward:
-                if self.frontblocked:
-                    return
-                if len(self.forward_moves) > 1:
-                    newdraw = random.uniform(0.0,1.0) 
-                    moves = self.forward_moves
-                    bisect.insort_left(moves, [newdraw, newdraw])
-                    self.position += moves[zip(*moves)[1].index(newdraw) + 1][1]
-                return
-            elif self.Pforward < draw <= self.Pforward + self.Pbackward:
-                if self.backblocked:
-                    return
-                if len(self.backward_moves) > 1:
-                    newdraw = random.uniform(0.0,1.0) 
-                    moves = self.backward_moves
-                    bisect.insort_left(moves, [newdraw, newdraw])
-                    self.position -= moves[zip(*moves)[1].index(newdraw) + 1][1]
-                return 
-            else:
-                return 
+            return 
 
 # class NascentSeq(object):
 #     '''
